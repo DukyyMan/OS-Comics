@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MEGA H — Comic Showcase</title>
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<style>
+  /* ============================================================
+     THEME VARIABLES
+     Two themes: "dark" (Netflix-style) and "glass" (liquid glass)
+     ============================================================ */
+  :root {
+    --bg: #0a0a0c;
+    --bg-grad-1: #141016;
+    --bg-grad-2: #0a0a0c;
+    --text: #f5f5f7;
+    --text-muted: #a1a1aa;
+    --accent: #e50914;          /* Netflix red */
+    --accent-soft: rgba(229,9,20,0.15);
+    --card-bg: #18181b;
+    --card-border: rgba(255,255,255,0.06);
+    --nav-bg: rgba(10,10,12,0.75);
+    --panel-bg: rgba(20,20,24,0.95);
+    --glass-blur: 0px;
+    --shadow: 0 10px 40px rgba(0,0,0,0.6);
+  }
+
+  /* Liquid glass theme */
+  html[data-theme="glass"] {
+    --bg: #0e1116;
+    --bg-grad-1: #1a2238;
+    --bg-grad-2: #0b0e14;
+    --text: #f4f7ff;
+    --text-muted: #b8c2d9;
+    --accent: #6d8bff;
+    --accent-soft: rgba(109,139,255,0.18);
+    --card-bg: rgba(255,255,255,0.07);
+    --card-border: rgba(255,255,255,0.16);
+    --nav-bg: rgba(255,255,255,0.06);
+    --panel-bg: rgba(30,38,58,0.55);
+    --glass-blur: 20px;
+    --shadow: 0 8px 32px rgba(0,0,0,0.4);
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    transition: background 0.5s ease, color 0.5s ease;
+    overflow-x: hidden;
+  }
+
+  /* Animated background blobs (mainly visible in glass theme) */
+  .bg-decor {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+    pointer-events: none;
+    background: radial-gradient(ellipse at top, var(--bg-grad-1), var(--bg-grad-2) 60%);
+    transition: background 0.5s ease;
+  }
+  .blob {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.5;
+    transition: opacity 0.6s ease;
+  }
+  html[data-theme="dark"] .blob { opacity: 0.18; }
+  .blob.b1 { width: 480px; height: 480px; background: var(--accent); top: -120px; left: -100px; animation: float1 18s ease-in-out infinite; }
+  .blob.b2 { width: 520px; height: 520px; background: #8b5cf6; bottom: -160px; right: -120px; animation: float2 22s ease-in-out infinite; }
+  .blob.b3 { width: 360px; height: 360px; background: #06b6d4; top: 40%; left: 50%; animation: float1 26s ease-in-out infinite; }
+  @keyframes float1 { 0%,100%{ transform: translate(0,0); } 50%{ transform: translate(60px,40px); } }
+  @keyframes float2 { 0%,100%{ transform: translate(0,0); } 50%{ transform: translate(-50px,-40px); } }
+
+  /* Glass surface utility */
+  .glass {
+    background: var(--nav-bg);
+    backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+    border: 1px solid var(--card-border);
+  }
+
+  /* Navbar */
+  .nav {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    transition: all 0.4s ease;
+  }
+
+  /* Comic card */
+  .comic-card {
+    position: relative;
+    border-radius: 14px;
+    overflow: hidden;
+    cursor: pointer;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    transition: transform 0.35s cubic-bezier(.2,.8,.2,1), box-shadow 0.35s ease, z-index 0s;
+    aspect-ratio: 2/3;
+  }
+  .comic-card img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.5s ease;
+  }
+  .comic-card:hover {
+    transform: scale(1.07) translateY(-6px);
+    box-shadow: var(--shadow);
+    z-index: 10;
+  }
+  .comic-card:hover img { transform: scale(1.1); }
+  .card-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: 14px;
+    background: linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.4) 45%, transparent 75%);
+    opacity: 0;
+    transition: opacity 0.35s ease;
+  }
+  .comic-card:hover .card-overlay { opacity: 1; }
+
+  /* Hide scrollbar for row sliders */
+  .row-scroll {
+    display: flex;
+    gap: 16px;
+    overflow-x: auto;
+    scroll-behavior: smooth;
+    padding: 12px 4px 24px;
+    scrollbar-width: none;
+  }
+  .row-scroll::-webkit-scrollbar { display: none; }
+  .row-scroll .comic-card { flex: 0 0 180px; }
+
+  /* Grid view */
+  .grid-view {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 18px;
+  }
+
+  /* Modal */
+  .modal-backdrop {
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(8px);
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+  .modal-backdrop.open { opacity: 1; pointer-events: auto; }
+  .modal {
+    max-width: 880px; width: 100%;
+    max-height: 90vh; overflow-y: auto;
+    border-radius: 18px;
+    background: var(--panel-bg);
+    backdrop-filter: blur(28px) saturate(160%);
+    -webkit-backdrop-filter: blur(28px) saturate(160%);
+    border: 1px solid var(--card-border);
+    box-shadow: var(--shadow);
+    transform: scale(0.92);
+    transition: transform 0.3s cubic-bezier(.2,.8,.2,1);
+  }
+  .modal-backdrop.open .modal { transform: scale(1); }
+  .modal::-webkit-scrollbar { width: 8px; }
+  .modal::-webkit-scrollbar-thumb { background: var(--card-border); border-radius: 8px; }
+
+  .btn-accent {
+    background: var(--accent);
+    color: #fff;
+    transition: filter 0.2s ease, transform 0.2s ease;
+  }
+  .btn-accent:hover { filter: brightness(1.12); transform: translateY(-1px); }
+
+  .scroll-btn {
+    background: var(--nav-bg);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--card-border);
+    transition: background 0.2s, transform 0.2s;
+  }
+  .scroll-btn:hover { transform: scale(1.1); }
+
+  .fade-in { animation: fadeUp 0.6s ease both; }
+  @keyframes fadeUp { from { opacity:0; transform: translateY(20px);} to {opacity:1; transform:none;} }
+</style>
+</head>
+<body data-theme="dark">
+
+<!-- Animated background -->
+<div class="bg-decor">
+  <div class="blob b1"></div>
+  <div class="blob b2"></div>
+  <div class="blob b3"></div>
+</div>
+
+<div class="relative" style="z-index:1;">
+
+  <!-- ============================ NAVBAR ============================ -->
+  <nav class="nav glass px-5 md:px-10 py-4 flex items-center justify-between">
+    <div class="flex items-center gap-2">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" style="color:var(--accent)">
+        <path d="M4 4h11l5 5v11a0 0 0 0 1 0 0H4z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M14 4v6h6" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+      </svg>
+      <span class="text-xl font-extrabold tracking-tight">MEGA<span style="color:var(--accent)"> H</span></span>
+    </div>
+
+    <div class="flex items-center gap-3">
+      <!-- Search -->
+      <input id="searchInput" type="text" placeholder="Search comics..."
+             class="hidden sm:block px-4 py-2 rounded-full text-sm outline-none w-44 focus:w-60 transition-all"
+             style="background:var(--card-bg);border:1px solid var(--card-border);color:var(--text)">
+      <!-- Theme toggle -->
+      <button id="themeToggle" class="glass rounded-full px-4 py-2 text-sm font-semibold flex items-center gap-2">
+        <span id="themeIcon">🌙</span>
+        <span id="themeLabel" class="hidden md:inline">Dark</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- ============================ HERO ============================ -->
+  <header class="relative px-5 md:px-10 pt-12 pb-8 md:pt-20 md:pb-14 max-w-6xl mx-auto">
+    <div class="fade-in max-w-2xl">
+      <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold mb-4" style="background:var(--accent-soft);color:var(--accent)">★ FEATURED COMIC</span>
+      <h1 class="text-4xl md:text-6xl font-black leading-tight mb-4">OS COMICS</h1>
+      <p class="text-base md:text-lg mb-6" style="color:var(--text-muted)">
+        Comics Made By And For OS CLAN. Amazing official and unofficial comics for everyone! Dive in, explore the worlds, and enjoy the ride!
+      </p>
+      <div class="flex gap-3">
+        <a href="#library" class="btn-accent px-6 py-3 rounded-lg font-bold">▶ Browse Library</a>
+        <button onclick="openModal(0)" class="glass px-6 py-3 rounded-lg font-bold">ℹ Latest Comic</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ============================ LIBRARY ============================ -->
+  <main id="library" class="px-5 md:px-10 max-w-6xl mx-auto pb-20">
+
+    <!-- Genre filter buttons -->
+    <div id="genreFilters" class="flex flex-wrap gap-2 mb-8"></div>
+
+    <!-- Rows are generated here by JavaScript -->
+    <div id="rowsContainer"></div>
+
+    <!-- Empty search state -->
+    <p id="noResults" class="hidden text-center py-16 text-lg" style="color:var(--text-muted)">No comics found 🕵️</p>
+  </main>
+
+  <!-- ============================ FOOTER ============================ -->
+  <footer class="glass px-5 md:px-10 py-8 text-center text-sm" style="color:var(--text-muted)">
+    <p>© 2026 MEGA H — Built for showcasing your comics. Made with ♥</p>
+  </footer>
+
+</div>
+
+<!-- ============================ MODAL ============================ -->
+<div id="modalBackdrop" class="modal-backdrop" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <div class="relative">
+      <img id="modalCover" src="" alt="" class="w-full max-h-80 object-cover rounded-t-[18px]">
+      <button onclick="closeModal()" class="absolute top-4 right-4 glass w-10 h-10 rounded-full text-xl flex items-center justify-center">✕</button>
+      <div class="absolute bottom-0 left-0 right-0 h-24" style="background:linear-gradient(to top,var(--panel-bg),transparent)"></div>
+    </div>
+    <div class="p-6 md:p-8 -mt-6 relative">
+      <div class="flex flex-wrap items-center gap-3 mb-3">
+        <h2 id="modalTitle" class="text-2xl md:text-3xl font-black"></h2>
+        <span id="modalGenre" class="px-3 py-1 rounded-full text-xs font-semibold" style="background:var(--accent-soft);color:var(--accent)"></span>
+      </div>
+      <p id="modalMeta" class="text-sm mb-4" style="color:var(--text-muted)"></p>
+      <p id="modalDesc" class="text-base leading-relaxed mb-6" style="color:var(--text-muted)"></p>
+      <a id="modalLink" href="#" target="_blank" class="btn-accent inline-block px-6 py-3 rounded-lg font-bold">▶ Read Now</a>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================================
+   ★★★  ADD YOUR COMICS HERE  ★★★
+   ----------------------------------------------------------------------------
+   To add a comic, copy one { ... } block below and fill in your details.
+
+   HOW TO ADD YOUR COMIC IMAGES:
+   1. Put your cover image files in the SAME folder as this index.html
+      (or in a subfolder, e.g. "images/").
+   2. Set "cover" to the path of your image, e.g.:
+         cover: "my-comic-cover.jpg"
+         cover: "images/my-comic-cover.jpg"
+   3. You can also use a full web URL for the image if it's hosted online.
+
+   FIELDS:
+     title    -> name of the comic
+     cover    -> path/URL to the cover image (portrait works best, 2:3 ratio)
+     genre    -> category (used for the rows & filter buttons)
+     year     -> release year (any text)
+     chapters -> number of chapters/pages (any text)
+     desc     -> short description shown in the popup
+     link     -> URL/file to open when "Read Now" is clicked (e.g. a PDF or page)
+   ============================================================================ */
+const comics = [
+  {
+    title: "Destruction Of The Legos",
+    cover: "https://plain-enam-prod-public.komododecks.com/202606/01/NpNAXdXhJJMxnYVJJasM/image.png",  // <-- replace with your image path
+    genre: "Parties",
+    year: "2026",
+    chapters: "N/A",
+    desc: "Chaos After The Destruction of Suli's Legos",
+    link: "https://plain-enam-prod-public.komododecks.com/202606/01/NpNAXdXhJJMxnYVJJasM/image.png"  // <-- link to your comic (PDF, webtoon page, etc.)
+  },
+  {
+    title: "O Gaming Chaos",
+    cover: "https://plain-enam-prod-public.komododecks.com/202606/01/dNBy2CkZQoij7ekwuSRu/image.webp",
+    genre: "Gaming",
+    year: "2026",
+    chapters: "N/A",
+    desc: "Typical Insanity As O Games At His House",
+    link: "https://plain-enam-prod-public.komododecks.com/202606/01/dNBy2CkZQoij7ekwuSRu/image.webp"
+  },
+  {
+    title: "Bedroom At S and L's",
+    cover: "https://plain-enam-prod-public.komododecks.com/202606/01/UlSslqmdoqfBH1PelZU6/image.webp",
+    genre: "Parties",
+    year: "2026",
+    chapters: "N/A",
+    desc: "Typical Stuff at S and L's House During A Party",
+    link: "https://plain-enam-prod-public.komododecks.com/202606/01/UlSslqmdoqfBH1PelZU6/image.webp"
+  },
+  {
+    title: "E's Sleepover Shenanagins",
+    cover: "https://plain-enam-prod-public.komododecks.com/202606/01/Lze91qGhYCljpuGTNe8i/image.png",
+    genre: "Parties",
+    year: "2026",
+    chapters: "N/A",
+    desc: "The Second Someone says The Sleepover Should be At His House",
+    link: "https://plain-enam-prod-public.komododecks.com/202606/01/Lze91qGhYCljpuGTNe8i/image.png"
+  },
+  {
+    title: "PlaceHolder",
+    cover: "https://placehold.co/400x600/2a1a2e/c084fc?text=PlaceHolder",
+    genre: "Life",
+    year: "2026",
+    chapters: "N/A",
+    desc: "Cozy stories of the regulars at a 24-hour café where everyone has a tale to tell over a cup of coffee.",
+    link: "#"
+  },
+  {
+    title: "PlaceHolder",
+    cover: "https://placehold.co/400x600/2a1a2e/c084fc?text=PlaceHolder",
+    genre: "Travel",
+    year: "2026",
+    chapters: "N/A",
+    desc: "Cozy stories of the regulars at a 24-hour café where everyone has a tale to tell over a cup of coffee.",
+    link: "#"
+  },
+  {
+    title: "PlaceHolder",
+    cover: "https://placehold.co/400x600/2a1a2e/c084fc?text=PlaceHolder",
+    genre: "Sports",
+    year: "2026",
+    chapters: "N/A",
+    desc: "Cozy stories of the regulars at a 24-hour café where everyone has a tale to tell over a cup of coffee.",
+    link: "#"
+  },
+  {
+    title: "PlaceHolder",
+    cover: "https://placehold.co/400x600/2a1a2e/c084fc?text=PlaceHolder",
+    genre: "Snapshot",
+    chapters: "N/A",
+    desc: "Cozy stories of the regulars at a 24-hour café where everyone has a tale to tell over a cup of coffee.",
+    link: "#"
+  },
+  /* 👇  ADD MORE COMICS BELOW THIS LINE — just copy a block above!  👇 */
+
+];
+
+/* ============================================================================
+   APP LOGIC  (you don't need to edit below unless you want to customize)
+   ============================================================================ */
+let activeGenre = "All";
+let searchTerm = "";
+
+const rowsContainer = document.getElementById('rowsContainer');
+const genreFilters = document.getElementById('genreFilters');
+const noResults = document.getElementById('noResults');
+
+// Build the list of unique genres for filter buttons
+function getGenres() {
+  return ["All", ...new Set(comics.map(c => c.genre))];
+}
+
+// Render the genre filter buttons
+function renderFilters() {
+  genreFilters.innerHTML = "";
+  getGenres().forEach(g => {
+    const btn = document.createElement('button');
+    const active = g === activeGenre;
+    btn.textContent = g;
+    btn.className = "px-4 py-2 rounded-full text-sm font-semibold transition-all";
+    btn.style.cssText = active
+      ? "background:var(--accent);color:#fff;"
+      : "background:var(--card-bg);color:var(--text);border:1px solid var(--card-border);";
+    btn.onclick = () => { activeGenre = g; render(); };
+    genreFilters.appendChild(btn);
+  });
+}
+
+// Create a single comic card element
+function createCard(comic, index) {
+  const card = document.createElement('div');
+  card.className = "comic-card";
+  card.onclick = () => openModal(index);
+  card.innerHTML = `
+    <img src="${comic.cover}" alt="${comic.title}" loading="lazy"
+         onerror="this.src='https://placehold.co/400x600/333/fff?text=Missing+Cover'">
+    <div class="card-overlay">
+      <h3 class="font-bold text-sm mb-1">${comic.title}</h3>
+      <p class="text-xs" style="color:#d4d4d8">${comic.genre} • ${comic.year}</p>
+    </div>`;
+  return card;
+}
+
+// Main render function: builds rows grouped by genre (Netflix style)
+function render() {
+  renderFilters();
+  rowsContainer.innerHTML = "";
+
+  // Filter by search term
+  const filtered = comics
+    .map((c, i) => ({ ...c, _i: i }))
+    .filter(c => c.title.toLowerCase().includes(searchTerm.toLowerCase()));
+
+  // Decide which genres to show as rows
+  let genresToShow = activeGenre === "All"
+    ? [...new Set(filtered.map(c => c.genre))]
+    : [activeGenre];
+
+  let totalShown = 0;
+
+  genresToShow.forEach(genre => {
+    const items = filtered.filter(c => c.genre === genre);
+    if (items.length === 0) return;
+    totalShown += items.length;
+
+    const section = document.createElement('section');
+    section.className = "mb-6 fade-in";
+
+    // Row header
+    const header = document.createElement('div');
+    header.className = "flex items-center justify-between mb-1";
+    header.innerHTML = `<h2 class="text-xl md:text-2xl font-extrabold">${genre}</h2>`;
+
+    // Scroll buttons
+    const controls = document.createElement('div');
+    controls.className = "flex gap-2";
+    const rowId = "row-" + genre.replace(/\s+/g, '-');
+    controls.innerHTML = `
+      <button class="scroll-btn w-9 h-9 rounded-full font-bold" onclick="scrollRow('${rowId}',-1)">‹</button>
+      <button class="scroll-btn w-9 h-9 rounded-full font-bold" onclick="scrollRow('${rowId}',1)">›</button>`;
+    header.appendChild(controls);
+    section.appendChild(header);
+
+    // Scrollable row
+    const row = document.createElement('div');
+    row.className = "row-scroll";
+    row.id = rowId;
+    items.forEach(c => row.appendChild(createCard(c, c._i)));
+    section.appendChild(row);
+
+    rowsContainer.appendChild(section);
+  });
+
+  noResults.classList.toggle('hidden', totalShown > 0);
+}
+
+// Scroll a row left/right
+function scrollRow(id, dir) {
+  const row = document.getElementById(id);
+  if (row) row.scrollBy({ left: dir * 400, behavior: 'smooth' });
+}
+
+// ---- Modal handling ----
+function openModal(index) {
+  const c = comics[index];
+  if (!c) return;
+  document.getElementById('modalCover').src = c.cover;
+  document.getElementById('modalCover').onerror = function(){ this.src='https://placehold.co/800x400/333/fff?text=Missing+Cover'; };
+  document.getElementById('modalTitle').textContent = c.title;
+  document.getElementById('modalGenre').textContent = c.genre;
+  document.getElementById('modalMeta').textContent = `${c.year} • ${c.chapters}`;
+  document.getElementById('modalDesc').textContent = c.desc;
+  document.getElementById('modalLink').href = c.link || "#";
+  document.getElementById('modalBackdrop').classList.add('open');
+  document.body.style.overflow = "hidden";
+}
+function closeModal() {
+  document.getElementById('modalBackdrop').classList.remove('open');
+  document.body.style.overflow = "";
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+// ---- Search ----
+document.getElementById('searchInput').addEventListener('input', e => {
+  searchTerm = e.target.value;
+  render();
+});
+
+// ---- Theme toggle (dark <-> glass) ----
+const themeToggle = document.getElementById('themeToggle');
+const themeIcon = document.getElementById('themeIcon');
+const themeLabel = document.getElementById('themeLabel');
+
+function applyTheme(theme) {
+  document.body.setAttribute('data-theme', theme);
+  document.documentElement.setAttribute('data-theme', theme);
+  if (theme === 'glass') {
+    themeIcon.textContent = '💧';
+    themeLabel.textContent = 'Glass';
+  } else {
+    themeIcon.textContent = '🌙';
+    themeLabel.textContent = 'Dark';
+  }
+  localStorage.setItem('inkvault-theme', theme);
+}
+themeToggle.addEventListener('click', () => {
+  const current = document.body.getAttribute('data-theme');
+  applyTheme(current === 'dark' ? 'glass' : 'dark');
+});
+
+// Load saved theme (default: dark)
+applyTheme(localStorage.getItem('inkvault-theme') || 'dark');
+
+// Initial render
+render();
+</script>
+</body>
+</html>
